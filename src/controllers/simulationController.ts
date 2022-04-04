@@ -25,7 +25,7 @@ export const verifyAuthorizateFGTS = async (req: Request, res: Response) => {
             codigo_promotora: USER_CODE,
             cpf_cliente: clearCpf,
             data_nascimento: '30-06-1992',
-            incluir_seguro: false,
+            incluir_seguro: true,
         }
         valor_solicitado && Number(valor_solicitado) > 0 ? validateBody = { ...validateBody, valor_solicitado: valor_solicitado.toString() } : null
         const simulation = await simulationServices(validateBody, token)
