@@ -12,58 +12,49 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authenticateService = void 0;
-const apiPan_1 = __importDefault(require("../configs/apiPan"));
-const banks_1 = __importDefault(require("../models/banks"));
+exports.getTokenService = void 0;
+const axios_1 = __importDefault(require("axios"));
 const dayjs_1 = __importDefault(require("dayjs"));
-const authenticateService = (dataUser) => __awaiter(void 0, void 0, void 0, function* () {
-    const accessToken = yield isToken();
-    if (!accessToken.created) {
-        const newToken = yield createTokenApiBank(dataUser);
-        yield banks_1.default.create({
-            access_token: newToken.token,
-            name: dataUser === null || dataUser === void 0 ? void 0 : dataUser.type,
-            expires_in: newToken.expires_in
+const banks_1 = __importDefault(require("../models/banks"));
+const getTokenService = () => __awaiter(void 0, void 0, void 0, function* () {
+    const token = yield banks_1.default.findOne({ name: "mercantil" });
+    if (!(token === null || token === void 0 ? void 0 : token.access_token)) {
+        const newToken = yield generateTokenMercantil();
+        const createBanck = yield banks_1.default.create({
+            name: "mercantil",
+            access_token: newToken.access_token,
+            expires_in: (0, dayjs_1.default)().add(newToken.expires_in, 'second').toDate()
         });
-        return newToken;
+        return createBanck.access_token;
     }
-    if (accessToken.created && accessToken.expired) {
-        const newToken = yield createTokenApiBank(dataUser);
-        yield banks_1.default.findOneAndUpdate({
-            name: dataUser === null || dataUser === void 0 ? void 0 : dataUser.type
-        }, {
-            $set: {
-                access_token: newToken.token,
-                expires_in: newToken.expires_in,
-                updated_at: Date.now()
-            }
-        }, { new: true });
-        return newToken;
+    if ((0, dayjs_1.default)(token.expires_in).isBefore((0, dayjs_1.default)())) {
+        const newToken = yield generateTokenMercantil();
+        yield banks_1.default.updateOne({ name: "mercantil" }, {
+            access_token: newToken.access_token,
+            expires_in: (0, dayjs_1.default)().add(newToken.expires_in, 'second').toDate()
+        });
+        return newToken.access_token;
     }
-    return { token: accessToken.access_token };
+    return token.access_token;
 });
-exports.authenticateService = authenticateService;
-const createTokenApiBank = (dataUser) => __awaiter(void 0, void 0, void 0, function* () {
-    const { data } = yield apiPan_1.default.post('/tokens', {
-        username: `${dataUser === null || dataUser === void 0 ? void 0 : dataUser.user_bank}_${dataUser === null || dataUser === void 0 ? void 0 : dataUser.code_bank.padStart(6, '0')}`,
-        password: dataUser === null || dataUser === void 0 ? void 0 : dataUser.password,
-        grant_type: "client_credentials+password"
-    }, { validateStatus: () => true });
-    if (data.codigo && !data.token) {
-        throw new Error('Error nas credencias');
-    }
-    return data;
-});
-const isToken = () => __awaiter(void 0, void 0, void 0, function* () {
-    const bankAuth = yield banks_1.default.findOne({
-        name: 'pan',
+exports.getTokenService = getTokenService;
+const generateTokenMercantil = () => __awaiter(void 0, void 0, void 0, function* () {
+    const baseUrl = 'https://api.mercantil.com.br:8443/auth/oauth/v2/token';
+    const { grant_type, client_id, client_secret } = {
+        grant_type: "client_credentials",
+        client_id: process.env.CLIENT_APIKEY,
+        client_secret: process.env.CLIENT_SECRET,
+    };
+    const { data, status } = yield axios_1.default.post(baseUrl, null, {
+        validateStatus: () => true,
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        params: {
+            grant_type,
+            client_id,
+            client_secret
+        }
     });
-    if (!(bankAuth === null || bankAuth === void 0 ? void 0 : bankAuth.expires_in)) {
-        return { created: false };
-    }
-    const timeDiff = (0, dayjs_1.default)(bankAuth === null || bankAuth === void 0 ? void 0 : bankAuth.expires_in).diff(Date.now(), 'minutes');
-    if (timeDiff <= 0) {
-        return { expired: true, created: true };
-    }
-    return { expired: false, access_token: bankAuth.access_token, created: true };
+    return data;
 });

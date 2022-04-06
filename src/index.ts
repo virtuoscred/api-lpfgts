@@ -6,7 +6,7 @@ import Routes from './router'
 import cors from 'cors'
 
 app.use(cors({
-    origin: process.env.URL_ORIGIN
+    // origin: process.env.URL_ORIGIN
 }))
 
 app.use(express.json())
