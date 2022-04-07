@@ -1,66 +1,50 @@
-import apiPan from "../configs/apiPan"
+import axios from "axios"
+import dayjs from "dayjs"
 import Bank from "../models/banks"
-import dayjs from 'dayjs'
 
-interface ITypeAuth {
-    type: 'pan' | 'mercantil'
-    user_bank: string,
-    code_bank: string,
-    password: string
-}
-
-export const authenticateService = async (dataUser: ITypeAuth) => {
-    
-    const accessToken = await isToken()
-    if (!accessToken.created) {
-        const newToken = await createTokenApiBank(dataUser)
-        await Bank.create({
-            access_token: newToken.token,
-            name: dataUser?.type,
-            expires_in: newToken.expires_in
+export const getTokenService = async (): Promise<string> => {
+    const token = await Bank.findOne({ name: "mercantil" })
+    if (!token?.access_token) {
+        const newToken = await generateTokenMercantil()
+        const createBanck = await Bank.create({
+            name: "mercantil",
+            access_token: newToken.access_token,
+            expires_in: dayjs().add(newToken.expires_in, 'second').toDate()
         })
-        return newToken
+        return createBanck.access_token
     }
-    if (accessToken.created && accessToken.expired) {
-        const newToken = await createTokenApiBank(dataUser)
-        await Bank.findOneAndUpdate({
-            name: dataUser?.type
-        }, {
-            $set: {
-                access_token: newToken.token,
-                expires_in: newToken.expires_in,
-                updated_at: Date.now()
-            }
-        }, { new: true })
-        return newToken
+    if (dayjs(token.expires_in).isBefore(dayjs())) {
+        const newToken = await generateTokenMercantil()
+        await Bank.updateOne({ name: "mercantil" }, {
+            access_token: newToken.access_token,
+            expires_in: dayjs().add(newToken.expires_in, 'second').toDate()
+        })
+        return newToken.access_token
     }
-    return { token: accessToken.access_token }
+    return token.access_token
 }
 
-const createTokenApiBank = async (dataUser: ITypeAuth) => {
-    const { data } = await apiPan.post('/tokens', {
-        username: `${dataUser?.user_bank}_${dataUser?.code_bank.padStart(6, '0')}`,
-        password: dataUser?.password,
-        grant_type: "client_credentials+password"
-    }, { validateStatus: () => true })
-    
-    if (data.codigo && !data.token) {
-        throw new Error('Error nas credencias')
-    }
+
+const generateTokenMercantil = async () => {
+
+    const baseUrl = 'https://api.mercantil.com.br:8443/auth/oauth/v2/token'
+    const { grant_type, client_id, client_secret } = {
+        grant_type: "client_credentials",
+        client_id: process.env.CLIENT_APIKEY,
+        client_secret: process.env.CLIENT_SECRET,
+    } 
+
+    const { data, status } = await axios.post(baseUrl, null,
+        {
+            validateStatus: () => true,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            params: {
+                grant_type,
+                client_id,
+                client_secret
+            }
+        })
     return data
 }
-
-const isToken = async () => {
-    const bankAuth = await Bank.findOne({
-        name: 'pan',
-    })
-    if (!bankAuth?.expires_in) {
-        return { created: false }
-    }
-    const timeDiff = dayjs(bankAuth?.expires_in).diff(Date.now(), 'minutes')
-    if (timeDiff <= 0) {
-        return { expired: true, created: true }
-    }
-    return { expired: false, access_token: bankAuth.access_token, created: true }
-}
-
