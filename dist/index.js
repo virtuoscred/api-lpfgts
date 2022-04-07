@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 const router_1 = __importDefault(require("./router"));
 const cors_1 = __importDefault(require("cors"));
 app.use((0, cors_1.default)({
-    origin: process.env.URL_ORIGIN
+    // origin: process.env.URL_ORIGIN
 }));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
